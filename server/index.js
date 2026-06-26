@@ -31,8 +31,9 @@ const fastify = Fastify({
 });
 
 // ─── Plugins ──────────────────────────────────────────
+const clientUrl = config.CLIENT_URL.endsWith('/') ? config.CLIENT_URL.slice(0, -1) : config.CLIENT_URL;
 await fastify.register(cors, {
-  origin: [config.CLIENT_URL, 'http://localhost:3000', 'http://localhost:5173'],
+  origin: [clientUrl, 'http://localhost:3000', 'http://localhost:5173'],
   credentials: true,
 });
 await fastify.register(cookie);
