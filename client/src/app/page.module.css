@@ -1,0 +1,338 @@
+.landing { min-height: 100vh; }
+
+/* ─── Nav ────────────────────────────────────────── */
+.nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--border);
+}
+
+.navInner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-5);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+}
+
+.logoIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--gradient-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ─── Hero ───────────────────────────────────────── */
+.hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 160px var(--space-5) 100px;
+  overflow: hidden;
+}
+
+.heroGlow {
+  position: absolute;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 800px;
+  height: 600px;
+  background: radial-gradient(ellipse, rgba(0, 122, 255, 0.15) 0%, rgba(88, 86, 214, 0.08) 40%, transparent 70%);
+  pointer-events: none;
+}
+
+.heroBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: rgba(0, 122, 255, 0.1);
+  border: 1px solid rgba(0, 122, 255, 0.2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--blue);
+  margin-bottom: var(--space-6);
+  animation: fadeIn 600ms ease;
+}
+
+.heroTitle {
+  font-size: clamp(40px, 8vw, 72px);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -2px;
+  margin-bottom: var(--space-6);
+  animation: slideUp 600ms var(--ease-spring);
+}
+
+.gradient {
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.heroDesc {
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+  max-width: 640px;
+  margin-bottom: var(--space-8);
+  line-height: 1.6;
+  animation: slideUp 600ms var(--ease-spring) 100ms both;
+}
+
+.heroCTA {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-12);
+  animation: slideUp 600ms var(--ease-spring) 200ms both;
+}
+
+.heroStats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-5) var(--space-8);
+  background: var(--surface-glass);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  animation: slideUp 600ms var(--ease-spring) 300ms both;
+}
+
+.heroStats span {
+  display: block;
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text-primary);
+}
+
+.heroStats small {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.heroDivider {
+  width: 1px;
+  height: 40px;
+  background: var(--border);
+}
+
+/* ─── Features ───────────────────────────────────── */
+.features {
+  padding: 120px 0;
+}
+
+.sectionTitle {
+  font-size: var(--text-3xl);
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: -1px;
+  margin-bottom: var(--space-3);
+}
+
+.sectionDesc {
+  text-align: center;
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+  max-width: 500px;
+  margin: 0 auto var(--space-12);
+}
+
+.featureGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-5);
+}
+
+.featureCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  animation: slideUp 500ms var(--ease-spring) both;
+}
+
+.featureCard h3 {
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.featureCard p {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.featureIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: var(--gradient-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+/* ─── Pricing ────────────────────────────────────── */
+.pricing {
+  padding: 120px 0;
+  background: var(--bg-secondary);
+}
+
+.priceGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.priceCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  position: relative;
+}
+
+.priceCard h3 {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.popular {
+  border: 2px solid var(--blue) !important;
+  box-shadow: var(--shadow-glow) !important;
+}
+
+.popularBadge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--space-1) var(--space-4);
+  background: var(--gradient-brand);
+  color: white;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.priceAmount span {
+  font-size: var(--text-4xl);
+  font-weight: 900;
+  letter-spacing: -1px;
+}
+
+.priceAmount small {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.priceDetails {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.priceHighlight {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.priceFeatures {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1;
+}
+
+.priceFeatures li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.priceFeatures li svg {
+  color: var(--green);
+  flex-shrink: 0;
+}
+
+/* ─── Footer ─────────────────────────────────────── */
+.footer {
+  padding: var(--space-10) 0;
+  border-top: 1px solid var(--separator);
+}
+
+.footerInner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  align-items: center;
+  text-align: center;
+}
+
+.footerBrand p {
+  color: var(--text-secondary);
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.footerCopy {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+/* ─── Responsive ─────────────────────────────────── */
+@media (max-width: 900px) {
+  .featureGrid { grid-template-columns: repeat(2, 1fr); }
+  .priceGrid { grid-template-columns: 1fr; max-width: 440px; margin: 0 auto; }
+}
+
+@media (max-width: 640px) {
+  .featureGrid { grid-template-columns: 1fr; }
+  .heroCTA { flex-direction: column; width: 100%; }
+  .heroCTA a { width: 100%; }
+  .heroStats { flex-direction: column; gap: var(--space-4); }
+  .heroDivider { width: 60px; height: 1px; }
+}

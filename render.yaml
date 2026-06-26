@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: qrforge-api
+    env: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node index.js
+    disk:
+      name: sqlite-data
+      mountPath: /opt/render/project/src/server/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DB_PATH
+        value: /opt/render/project/src/server/data/qrforge.db
+      - key: CLIENT_URL
+        # We will need to set this in the Render dashboard after Vercel deployment
+        value: https://qrforge-demo.vercel.app
+      - key: BASE_URL
+        # This will be the Render URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true

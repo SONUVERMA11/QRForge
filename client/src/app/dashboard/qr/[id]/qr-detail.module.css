@@ -1,0 +1,48 @@
+.detailHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-5); }
+.headerLeft { display: flex; align-items: center; gap: var(--space-4); }
+.qrImageSmall { width: 64px; height: 64px; background: white; border-radius: var(--radius-md); padding: 4px; flex-shrink: 0; }
+.qrImageSmall img { width: 100%; height: 100%; object-fit: contain; }
+.title { font-size: var(--text-xl); font-weight: 800; letter-spacing: -0.3px; }
+.shortCode { display: flex; align-items: center; gap: var(--space-2); font-family: var(--font-mono); font-size: var(--text-sm); color: var(--blue); margin-top: 2px; }
+.headerActions { display: flex; gap: var(--space-2); }
+
+.destCard { margin-bottom: var(--space-5); }
+.destRow { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
+.destLabel { font-size: var(--text-xs); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; display: block; margin-bottom: 4px; }
+.destUrl { font-size: var(--text-base); color: var(--blue); display: flex; align-items: center; gap: var(--space-1); }
+.editUrlRow { display: flex; gap: var(--space-2); margin-top: var(--space-3); align-items: center; }
+.editUrlRow .input { flex: 1; }
+
+.periodRow { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-5); }
+.sectionTitle { font-size: var(--text-lg); font-weight: 800; }
+
+.miniIcon { width: 36px; height: 36px; border-radius: var(--radius-sm); background: rgba(0,122,255,0.1); color: var(--blue); display: flex; align-items: center; justify-content: center; }
+
+.chartsGrid { display: grid; grid-template-columns: 1.5fr 1fr; gap: var(--space-5); margin-bottom: var(--space-5); }
+.chartCard h3 { font-size: var(--text-md); font-weight: 700; margin-bottom: var(--space-4); }
+
+.legend { display: flex; flex-direction: column; gap: var(--space-2); }
+.legendRow { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--text-secondary); }
+.legendDot { width: 10px; height: 10px; border-radius: var(--radius-full); }
+
+.scanList { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-y: auto; }
+.scanItem { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); transition: background var(--transition-fast); }
+.scanItem:hover { background: var(--surface-hover); }
+.scanDevice { font-size: 20px; }
+.scanInfo { flex: 1; display: flex; flex-direction: column; }
+.scanInfo span { font-size: var(--text-sm); font-weight: 500; }
+.scanInfo small { font-size: var(--text-xs); color: var(--text-tertiary); }
+
+.historyCard { margin-bottom: var(--space-5); }
+.historyItem { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--separator); position: relative; padding-left: var(--space-5); }
+.historyDot { width: 10px; height: 10px; border-radius: var(--radius-full); background: var(--bg-quaternary); position: absolute; left: 0; top: 18px; }
+.historyDotActive { background: var(--green); box-shadow: 0 0 8px rgba(52,199,89,0.4); }
+.historyContent { flex: 1; }
+.historyUrl { font-size: var(--text-sm); color: var(--blue); display: block; }
+.historyContent small { font-size: var(--text-xs); color: var(--text-tertiary); }
+
+@media (max-width: 900px) {
+  .chartsGrid { grid-template-columns: 1fr; }
+  .detailHeader { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
+  .periodRow { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
+}
