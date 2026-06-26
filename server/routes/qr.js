@@ -147,7 +147,7 @@ export default async function qrRoutes(fastify) {
     if (updates.fallbackUrl !== undefined) { sets.push('fallback_url = ?'); params.push(updates.fallbackUrl); }
 
     if (sets.length > 0) {
-      sets.push('updated_at = datetime("now")');
+      sets.push("updated_at = datetime('now')");
       db.prepare(`UPDATE qr_codes SET ${sets.join(', ')} WHERE id = ?`).run(...params, qr.id);
       cache.invalidateRedirect(qr.short_code);
     }
@@ -176,7 +176,7 @@ export default async function qrRoutes(fastify) {
     const redirectId = uuidv4();
 
     const transaction = db.transaction(() => {
-      db.prepare('UPDATE redirects SET is_current = 0, deactivated_at = datetime("now") WHERE qr_id = ? AND is_current = 1').run(qr.id);
+      db.prepare("UPDATE redirects SET is_current = 0, deactivated_at = datetime('now') WHERE qr_id = ? AND is_current = 1").run(qr.id);
       db.prepare('INSERT INTO redirects (id, qr_id, destination_url, is_current, created_by, notes) VALUES (?, ?, ?, 1, ?, ?)').run(
         redirectId, qr.id, destinationUrl, request.user.id, notes || null
       );

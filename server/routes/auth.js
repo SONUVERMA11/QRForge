@@ -154,12 +154,12 @@ export default async function authRoutes(fastify) {
     const db = getDb();
 
     if (name) {
-      db.prepare('UPDATE users SET name = ?, updated_at = datetime("now") WHERE id = ?')
+      db.prepare("UPDATE users SET name = ?, updated_at = datetime('now') WHERE id = ?")
         .run(name, request.user.id);
     }
 
     if (avatarUrl !== undefined) {
-      db.prepare('UPDATE users SET avatar_url = ?, updated_at = datetime("now") WHERE id = ?')
+      db.prepare("UPDATE users SET avatar_url = ?, updated_at = datetime('now') WHERE id = ?")
         .run(avatarUrl, request.user.id);
     }
 
