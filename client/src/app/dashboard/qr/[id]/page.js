@@ -45,10 +45,13 @@ export default function QRDetailPage({ params }) {
   };
 
   const updateRedirect = async () => {
-    if (!newUrl.startsWith('http')) return;
+    let finalUrl = newUrl;
+    if (!finalUrl.startsWith('http')) {
+      finalUrl = 'https://' + finalUrl;
+    }
     setSaving(true);
     try {
-      await api.setRedirect(id, { destinationUrl: newUrl });
+      await api.setRedirect(id, { destinationUrl: finalUrl });
       setEditingUrl(false);
       setNewUrl('');
       fetchData();
