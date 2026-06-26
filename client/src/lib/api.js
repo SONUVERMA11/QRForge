@@ -20,6 +20,7 @@ async function request(path, options = {}) {
     headers,
     body: body ? JSON.stringify(body) : undefined,
     credentials: 'include',
+    cache: 'no-store',
   });
 
   const data = await res.json().catch(() => null);
