@@ -1,5 +1,5 @@
 /**
- * QRForge — QR Code CRUD Routes
+ * QRForge — QR Code CRUD Routes (PostgreSQL)
  */
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../db/connection.js';
@@ -18,7 +18,7 @@ export default async function qrRoutes(fastify) {
     const db = getDb();
     const { search, tag, folder, page = 1, limit = 20, sort = 'created_at', order = 'desc' } = request.query;
     const offset = (page - 1) * limit;
-    
+
     let where = 'WHERE q.org_id = ?';
     const params = [request.user.orgId];
 
@@ -30,12 +30,12 @@ export default async function qrRoutes(fastify) {
     const sortCol = allowedSorts.includes(sort) ? sort : 'created_at';
     const sortOrder = order === 'asc' ? 'ASC' : 'DESC';
 
-    const total = db.prepare(`SELECT COUNT(*) as count FROM qr_codes q ${where}`).get(...params);
-    const qrCodes = db.prepare(`
+    const total = await db.get(`SELECT COUNT(*) as count FROM qr_codes q ${where}`, ...params);
+    const qrCodes = await db.all(`
       SELECT q.*, r.destination_url as current_url
       FROM qr_codes q LEFT JOIN redirects r ON r.qr_id = q.id AND r.is_current = 1
       ${where} ORDER BY q.${sortCol} ${sortOrder} LIMIT ? OFFSET ?
-    `).all(...params, limit, offset);
+    `, ...params, limit, offset);
 
     return {
       success: true,
@@ -49,8 +49,7 @@ export default async function qrRoutes(fastify) {
     const db = getDb();
     const user = request.user;
 
-    // Check QR limit
-    const qrCount = db.prepare('SELECT COUNT(*) as count FROM qr_codes WHERE org_id = ?').get(user.orgId);
+    const qrCount = await db.get('SELECT COUNT(*) as count FROM qr_codes WHERE org_id = ?', user.orgId);
     if (qrCount.count >= user.qrLimit) {
       return reply.status(403).send({ error: 'QR limit reached', message: `Your plan allows ${user.qrLimit} QR codes.` });
     }
@@ -58,11 +57,10 @@ export default async function qrRoutes(fastify) {
     const { label, destinationUrl, tags, folderId, customCode, scanLimit, expiresAt, fallbackUrl, password, styleConfig } = request.body;
     let shortCode = customCode || generateShortCode();
 
-    // Ensure uniqueness
-    const existing = db.prepare('SELECT id FROM qr_codes WHERE short_code = ?').get(shortCode);
+    const existing = await db.get('SELECT id FROM qr_codes WHERE short_code = ?', shortCode);
     if (existing) {
       if (customCode) return reply.status(409).send({ error: 'Short code already taken' });
-      shortCode = generateShortCode(); // Regenerate
+      shortCode = generateShortCode();
     }
 
     const qrId = uuidv4();
@@ -70,19 +68,18 @@ export default async function qrRoutes(fastify) {
     let passwordHash = null;
     if (password) passwordHash = await hashPassword(password);
 
-    const transaction = db.transaction(() => {
-      db.prepare(`
+    await db.transaction(async (tx) => {
+      await tx.run(`
         INSERT INTO qr_codes (id, short_code, owner_id, org_id, label, tags, folder_id, scan_limit, expires_at, fallback_url, password_hash, style_config)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(qrId, shortCode, user.id, user.orgId, label || 'Untitled QR', JSON.stringify(tags || []),
+      `, qrId, shortCode, user.id, user.orgId, label || 'Untitled QR', JSON.stringify(tags || []),
         folderId || null, scanLimit || null, expiresAt || null, fallbackUrl || null, passwordHash, JSON.stringify(styleConfig || {}));
 
-      db.prepare(`
+      await tx.run(`
         INSERT INTO redirects (id, qr_id, destination_url, is_current, created_by)
         VALUES (?, ?, ?, 1, ?)
-      `).run(redirectId, qrId, destinationUrl, user.id);
+      `, redirectId, qrId, destinationUrl, user.id);
     });
-    transaction();
 
     const qrUrl = `${config.BASE_URL}/r/${shortCode}`;
     const qrImage = await generateQRDataUrl(qrUrl, styleConfig);
@@ -100,24 +97,24 @@ export default async function qrRoutes(fastify) {
   // ─── Get QR Code Detail ────────────────────────
   fastify.get('/api/qr/:id', { preHandler: [authGuard] }, async (request, reply) => {
     const db = getDb();
-    const qr = db.prepare(`
+    const qr = await db.get(`
       SELECT q.*, r.destination_url as current_url, r.id as redirect_id
       FROM qr_codes q LEFT JOIN redirects r ON r.qr_id = q.id AND r.is_current = 1
       WHERE q.id = ? AND q.org_id = ?
-    `).get(request.params.id, request.user.orgId);
+    `, request.params.id, request.user.orgId);
 
     if (!qr) return reply.status(404).send({ error: 'QR code not found' });
 
     const qrUrl = `${config.BASE_URL}/r/${qr.short_code}`;
     const qrImage = await generateQRDataUrl(qrUrl, JSON.parse(qr.style_config || '{}'));
 
-    const redirectHistory = db.prepare(`
+    const redirectHistory = await db.all(`
       SELECT * FROM redirects WHERE qr_id = ? ORDER BY activated_at DESC
-    `).all(qr.id);
+    `, qr.id);
 
-    const rules = db.prepare(`
+    const rules = await db.all(`
       SELECT * FROM rules WHERE qr_id = ? ORDER BY priority ASC
-    `).all(qr.id);
+    `, qr.id);
 
     return {
       success: true,
@@ -131,7 +128,7 @@ export default async function qrRoutes(fastify) {
   // ─── Update QR Code ────────────────────────────
   fastify.patch('/api/qr/:id', { preHandler: [authGuard], schema: schemas.updateQR }, async (request, reply) => {
     const db = getDb();
-    const qr = db.prepare('SELECT * FROM qr_codes WHERE id = ? AND org_id = ?').get(request.params.id, request.user.orgId);
+    const qr = await db.get('SELECT * FROM qr_codes WHERE id = ? AND org_id = ?', request.params.id, request.user.orgId);
     if (!qr) return reply.status(404).send({ error: 'QR code not found' });
 
     const updates = request.body;
@@ -147,8 +144,8 @@ export default async function qrRoutes(fastify) {
     if (updates.fallbackUrl !== undefined) { sets.push('fallback_url = ?'); params.push(updates.fallbackUrl); }
 
     if (sets.length > 0) {
-      sets.push("updated_at = datetime('now')");
-      db.prepare(`UPDATE qr_codes SET ${sets.join(', ')} WHERE id = ?`).run(...params, qr.id);
+      sets.push("updated_at = NOW()");
+      await db.run(`UPDATE qr_codes SET ${sets.join(', ')} WHERE id = ?`, ...params, qr.id);
       cache.invalidateRedirect(qr.short_code);
     }
 
@@ -158,10 +155,10 @@ export default async function qrRoutes(fastify) {
   // ─── Delete QR Code ────────────────────────────
   fastify.delete('/api/qr/:id', { preHandler: [authGuard] }, async (request, reply) => {
     const db = getDb();
-    const qr = db.prepare('SELECT * FROM qr_codes WHERE id = ? AND org_id = ?').get(request.params.id, request.user.orgId);
+    const qr = await db.get('SELECT * FROM qr_codes WHERE id = ? AND org_id = ?', request.params.id, request.user.orgId);
     if (!qr) return reply.status(404).send({ error: 'QR code not found' });
 
-    db.prepare('DELETE FROM qr_codes WHERE id = ?').run(qr.id);
+    await db.run('DELETE FROM qr_codes WHERE id = ?', qr.id);
     cache.invalidateRedirect(qr.short_code);
     return { success: true, message: 'QR code deleted.' };
   });
@@ -169,19 +166,17 @@ export default async function qrRoutes(fastify) {
   // ─── Set New Redirect ──────────────────────────
   fastify.post('/api/qr/:id/redirect', { preHandler: [authGuard], schema: schemas.setRedirect }, async (request, reply) => {
     const db = getDb();
-    const qr = db.prepare('SELECT * FROM qr_codes WHERE id = ? AND org_id = ?').get(request.params.id, request.user.orgId);
+    const qr = await db.get('SELECT * FROM qr_codes WHERE id = ? AND org_id = ?', request.params.id, request.user.orgId);
     if (!qr) return reply.status(404).send({ error: 'QR code not found' });
 
     const { destinationUrl, notes } = request.body;
     const redirectId = uuidv4();
 
-    const transaction = db.transaction(() => {
-      db.prepare("UPDATE redirects SET is_current = 0, deactivated_at = datetime('now') WHERE qr_id = ? AND is_current = 1").run(qr.id);
-      db.prepare('INSERT INTO redirects (id, qr_id, destination_url, is_current, created_by, notes) VALUES (?, ?, ?, 1, ?, ?)').run(
-        redirectId, qr.id, destinationUrl, request.user.id, notes || null
-      );
+    await db.transaction(async (tx) => {
+      await tx.run("UPDATE redirects SET is_current = 0, deactivated_at = NOW() WHERE qr_id = ? AND is_current = 1", qr.id);
+      await tx.run('INSERT INTO redirects (id, qr_id, destination_url, is_current, created_by, notes) VALUES (?, ?, ?, 1, ?, ?)',
+        redirectId, qr.id, destinationUrl, request.user.id, notes || null);
     });
-    transaction();
 
     cache.invalidateRedirect(qr.short_code);
     return reply.status(201).send({ success: true, data: { id: redirectId, destinationUrl, notes } });
@@ -190,7 +185,7 @@ export default async function qrRoutes(fastify) {
   // ─── Get QR Image ─────────────────────────────
   fastify.get('/api/qr/:id/image', { preHandler: [authGuard] }, async (request, reply) => {
     const db = getDb();
-    const qr = db.prepare('SELECT short_code, style_config FROM qr_codes WHERE id = ? AND org_id = ?').get(request.params.id, request.user.orgId);
+    const qr = await db.get('SELECT short_code, style_config FROM qr_codes WHERE id = ? AND org_id = ?', request.params.id, request.user.orgId);
     if (!qr) return reply.status(404).send({ error: 'QR code not found' });
 
     const fmt = request.query.fmt || 'png';
@@ -208,12 +203,12 @@ export default async function qrRoutes(fastify) {
   // ─── Analytics for QR ──────────────────────────
   fastify.get('/api/qr/:id/analytics', { preHandler: [authGuard] }, async (request, reply) => {
     const db = getDb();
-    const qr = db.prepare('SELECT id FROM qr_codes WHERE id = ? AND org_id = ?').get(request.params.id, request.user.orgId);
+    const qr = await db.get('SELECT id FROM qr_codes WHERE id = ? AND org_id = ?', request.params.id, request.user.orgId);
     if (!qr) return reply.status(404).send({ error: 'QR code not found' });
 
     const { getQRAnalytics } = await import('../services/analytics-service.js');
     const { period = '30d', groupBy = 'day' } = request.query;
-    const analytics = getQRAnalytics(qr.id, { period, groupBy });
+    const analytics = await getQRAnalytics(qr.id, { period, groupBy });
     return { success: true, data: analytics };
   });
 }

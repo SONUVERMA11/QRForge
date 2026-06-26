@@ -1,19 +1,11 @@
 /**
- * QRForge — Auth Guard Middleware
- * 
- * JWT-based authentication for API routes.
- * Extracts and validates the token from cookies or Authorization header.
+ * QRForge — Auth Guard Middleware (PostgreSQL)
  */
 
 import { verifyToken } from '../utils/crypto.js';
 import { getDb } from '../db/connection.js';
 
-/**
- * Fastify preHandler hook for authenticated routes.
- * Sets request.user with full user + org data.
- */
 export async function authGuard(request, reply) {
-  // Extract token from cookie or Authorization header
   let token = request.cookies?.token;
 
   if (!token) {
@@ -30,7 +22,6 @@ export async function authGuard(request, reply) {
     });
   }
 
-  // Verify JWT
   const payload = verifyToken(token);
   if (!payload) {
     return reply.status(401).send({
@@ -39,15 +30,14 @@ export async function authGuard(request, reply) {
     });
   }
 
-  // Fetch user from database (ensures user still exists & gets fresh data)
   const db = getDb();
-  const user = db.prepare(`
+  const user = await db.get(`
     SELECT u.id, u.email, u.name, u.role, u.org_id, u.avatar_url,
            o.name as org_name, o.plan, o.qr_limit, o.scan_limit_monthly
     FROM users u
     JOIN organizations o ON o.id = u.org_id
     WHERE u.id = ?
-  `).get(payload.userId);
+  `, payload.userId);
 
   if (!user) {
     return reply.status(401).send({
@@ -56,7 +46,6 @@ export async function authGuard(request, reply) {
     });
   }
 
-  // Attach to request for downstream handlers
   request.user = {
     id: user.id,
     email: user.email,
@@ -71,16 +60,11 @@ export async function authGuard(request, reply) {
   };
 }
 
-/**
- * Role-based access control. Use after authGuard.
- * @param {string[]} allowedRoles - Roles that can access this route
- */
 export function requireRole(...allowedRoles) {
   return async function (request, reply) {
     if (!request.user) {
       return reply.status(401).send({ error: 'Unauthorized' });
     }
-
     if (!allowedRoles.includes(request.user.role)) {
       return reply.status(403).send({
         error: 'Forbidden',

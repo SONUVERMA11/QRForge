@@ -34,7 +34,7 @@ export default async function redirectRoute(fastify) {
       };
     } catch {}
 
-    const result = resolveRedirect(shortCode, {
+    const result = await resolveRedirect(shortCode, {
       country: geo.country, region: geo.region, deviceType: deviceInfo.deviceType, ip: clientIp,
     });
 
@@ -64,11 +64,6 @@ export default async function redirectRoute(fastify) {
         referrer: request.headers.referer || null, userAgent,
         latitude: geo.latitude, longitude: geo.longitude,
       });
-      // Prevent mobile browsers from caching the redirect so it's always dynamic
-      reply.header('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
-      reply.header('Pragma', 'no-cache');
-      reply.header('Expires', '0');
-      
       return reply.code(302).redirect(result.destinationUrl);
     }
     return reply.status(500).send({ error: 'Internal error' });

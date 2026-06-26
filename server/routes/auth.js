@@ -1,7 +1,5 @@
 /**
- * QRForge — Auth Routes
- * 
- * Registration, login, logout, and user profile endpoints.
+ * QRForge — Auth Routes (PostgreSQL)
  */
 
 import { v4 as uuidv4 } from 'uuid';
@@ -10,10 +8,6 @@ import { hashPassword, verifyPassword, generateToken } from '../utils/crypto.js'
 import { schemas } from '../utils/validators.js';
 import { authGuard } from '../middleware/auth-guard.js';
 
-/**
- * Register auth routes with Fastify.
- * @param {import('fastify').FastifyInstance} fastify
- */
 export default async function authRoutes(fastify) {
 
   // ─── Register ────────────────────────────────────
@@ -23,8 +17,7 @@ export default async function authRoutes(fastify) {
     const { email, password, name, orgName } = request.body;
     const db = getDb();
 
-    // Check if email already exists
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const existing = await db.get('SELECT id FROM users WHERE email = ?', email);
     if (existing) {
       return reply.status(409).send({
         error: 'Conflict',
@@ -32,32 +25,28 @@ export default async function authRoutes(fastify) {
       });
     }
 
-    // Create organization
     const orgId = uuidv4();
-    db.prepare(`
+    await db.run(`
       INSERT INTO organizations (id, name, plan, qr_limit, scan_limit_monthly)
       VALUES (?, ?, 'free', 5, 500)
-    `).run(orgId, orgName || `${name}'s Organization`);
+    `, orgId, orgName || `${name}'s Organization`);
 
-    // Create user
     const userId = uuidv4();
     const passwordHash = await hashPassword(password);
 
-    db.prepare(`
+    await db.run(`
       INSERT INTO users (id, org_id, email, password_hash, name, role)
       VALUES (?, ?, ?, ?, ?, 'owner')
-    `).run(userId, orgId, email, passwordHash, name);
+    `, userId, orgId, email, passwordHash, name);
 
-    // Generate JWT
     const token = generateToken({ userId, orgId, role: 'owner' });
 
-    // Set httpOnly cookie
     reply.setCookie('token', token, {
       httpOnly: true,
-      secure: false, // Set true in production with HTTPS
+      secure: false,
       sameSite: 'lax',
       path: '/',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+      maxAge: 7 * 24 * 60 * 60,
     });
 
     return reply.status(201).send({
@@ -75,14 +64,13 @@ export default async function authRoutes(fastify) {
     const { email, password } = request.body;
     const db = getDb();
 
-    // Find user
-    const user = db.prepare(`
+    const user = await db.get(`
       SELECT u.id, u.email, u.name, u.role, u.password_hash, u.org_id, u.avatar_url,
              o.name as org_name, o.plan
       FROM users u
       JOIN organizations o ON o.id = u.org_id
       WHERE u.email = ?
-    `).get(email);
+    `, email);
 
     if (!user) {
       return reply.status(401).send({
@@ -91,7 +79,6 @@ export default async function authRoutes(fastify) {
       });
     }
 
-    // Verify password
     const valid = await verifyPassword(password, user.password_hash);
     if (!valid) {
       return reply.status(401).send({
@@ -100,10 +87,8 @@ export default async function authRoutes(fastify) {
       });
     }
 
-    // Generate JWT
     const token = generateToken({ userId: user.id, orgId: user.org_id, role: user.role });
 
-    // Set httpOnly cookie
     reply.setCookie('token', token, {
       httpOnly: true,
       secure: false,
@@ -154,13 +139,13 @@ export default async function authRoutes(fastify) {
     const db = getDb();
 
     if (name) {
-      db.prepare("UPDATE users SET name = ?, updated_at = datetime('now') WHERE id = ?")
-        .run(name, request.user.id);
+      await db.run("UPDATE users SET name = ?, updated_at = NOW() WHERE id = ?",
+        name, request.user.id);
     }
 
     if (avatarUrl !== undefined) {
-      db.prepare("UPDATE users SET avatar_url = ?, updated_at = datetime('now') WHERE id = ?")
-        .run(avatarUrl, request.user.id);
+      await db.run("UPDATE users SET avatar_url = ?, updated_at = NOW() WHERE id = ?",
+        avatarUrl, request.user.id);
     }
 
     return { success: true, message: 'Profile updated.' };
