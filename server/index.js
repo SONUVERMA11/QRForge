@@ -1,5 +1,9 @@
 /**
- * QRForge — Server Entry Point (PostgreSQL)
+ * QRForge — Server Entry Point
+ * 
+ * Architecture: The redirect endpoint (/r/:shortCode) has its OWN rate limit
+ * (100 req/min/IP) separate from the API rate limit (60 req/min/IP).
+ * This ensures high-throughput scanning while protecting the admin API.
  */
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
@@ -13,7 +17,7 @@ import redirectRoute from './routes/redirect.js';
 import analyticsRoutes from './routes/analytics.js';
 
 validateConfig();
-await initializeDatabase();
+initializeDatabase();
 
 const fastify = Fastify({
   logger: {
@@ -41,33 +45,13 @@ await fastify.register(rateLimit, {
   keyGenerator: (request) => {
     return request.headers['x-forwarded-for']?.split(',')[0]?.trim() || request.ip;
   },
+  // Skip rate limit for redirect routes — they have their own
   allowList: (request) => {
     return request.url.startsWith('/r/');
   },
 });
 
-// ─── Routes ───────────────────────────────────────────
-await fastify.register(authRoutes);
-await fastify.register(qrRoutes);
-await fastify.register(redirectRoute);
-await fastify.register(analyticsRoutes);
-
-// ─── Redirect-specific rate limit ─────────────────────
-fastify.after(() => {
-  fastify.route({
-    method: 'GET',
-    url: '/r/:shortCode',
-    config: {
-      rateLimit: {
-        max: 200,
-        timeWindow: '1 minute',
-      },
-    },
-    handler: async () => {},
-  });
-});
-
-// ─── Health Check ─────────────────────────────────────
+// Health check
 fastify.get('/api/health', async () => ({
   status: 'ok',
   service: 'QRForge API',
@@ -76,16 +60,35 @@ fastify.get('/api/health', async () => ({
   timestamp: new Date().toISOString(),
 }));
 
+// ─── Routes ───────────────────────────────────────────
+await fastify.register(authRoutes);
+await fastify.register(qrRoutes);
+await fastify.register(analyticsRoutes);
+
+// Redirect route: separate rate limit (200 req/min per IP)
+// This is the HOT PATH — needs higher throughput
+await fastify.register(async function redirectPlugin(app) {
+  await app.register(rateLimit, {
+    max: 200,
+    timeWindow: '1 minute',
+    keyGenerator: (request) => {
+      return request.headers['x-forwarded-for']?.split(',')[0]?.trim() || request.ip;
+    },
+  });
+  await app.register(redirectRoute);
+});
+
 // ─── Graceful Shutdown ────────────────────────────────
 const shutdown = async (signal) => {
   console.log(`\n${signal} received. Shutting down gracefully...`);
-  await closeDb();
+  closeDb();
+  await fastify.close();
   process.exit(0);
 };
-process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-// ─── Start Server ─────────────────────────────────────
+// ─── Start ────────────────────────────────────────────
 try {
   await fastify.listen({ port: config.PORT, host: config.HOST });
   console.log(`\n🚀 QRForge API running at http://localhost:${config.PORT}`);

@@ -1,129 +1,89 @@
 /**
- * QRForge — Database Connection (PostgreSQL)
+ * QRForge — Database Connection
  * 
- * Async wrapper around node-postgres with a ?-placeholder compatibility
- * layer so existing SQL queries work with minimal changes.
+ * SQLite connection with WAL mode for optimal read performance.
+ * Designed with a clean interface for future PostgreSQL migration.
  */
 
-import pg from 'pg';
+import Database from 'better-sqlite3';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { mkdirSync, existsSync } from 'fs';
+import { config } from '../config/env.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-let pool = null;
-
-/** Convert SQLite-style ? placeholders to PostgreSQL $1, $2, ... */
-function pg$(sql) {
-  let i = 0;
-  return sql.replace(/\?/g, () => `$${++i}`);
-}
+let db = null;
 
 /**
- * The shared db object. Every method is async and uses ? placeholders.
- *
- *   await db.get('SELECT * FROM users WHERE id = ?', userId)
- *   await db.all('SELECT * FROM users')
- *   await db.run('INSERT INTO users (id) VALUES (?)', id)
- *   await db.transaction(async (tx) => { await tx.run(...); })
+ * Initialize and return the database connection.
+ * Creates the data directory and applies schema if needed.
  */
-export const db = {
-  async get(sql, ...params) {
-    const { rows } = await pool.query(pg$(sql), params);
-    return rows[0] || null;
-  },
-  async all(sql, ...params) {
-    const { rows } = await pool.query(pg$(sql), params);
-    return rows;
-  },
-  async run(sql, ...params) {
-    return pool.query(pg$(sql), params);
-  },
-  async transaction(fn) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const tx = {
-        async get(sql, ...params) {
-          const { rows } = await client.query(pg$(sql), params);
-          return rows[0] || null;
-        },
-        async all(sql, ...params) {
-          const { rows } = await client.query(pg$(sql), params);
-          return rows;
-        },
-        async run(sql, ...params) {
-          return client.query(pg$(sql), params);
-        },
-      };
-      await fn(tx);
-      await client.query('COMMIT');
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
-    }
-  },
-};
-
-/** For backwards-compat: getDb() returns the same db singleton */
 export function getDb() {
+  if (db) return db;
+
+  // Ensure data directory exists
+  const dbDir = dirname(config.DB_PATH);
+  if (!existsSync(dbDir)) {
+    mkdirSync(dbDir, { recursive: true });
+  }
+
+  db = new Database(config.DB_PATH);
+
+  // Performance optimizations for SQLite
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+  db.pragma('busy_timeout = 5000');
+  db.pragma('synchronous = NORMAL');
+  db.pragma('cache_size = -20000'); // 20MB cache
+
   return db;
 }
 
 /**
- * Initialize the PostgreSQL connection pool and run schema.
+ * Initialize the database schema from schema.sql
  */
-export async function initializeDatabase() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error('DATABASE_URL environment variable is required');
-  }
-
-  pool = new pg.Pool({
-    connectionString,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-    max: 10,
-    idleTimeoutMillis: 30000,
-  });
-
-  // Test connection
-  await pool.query('SELECT 1');
-
-  // Run schema
+export function initializeDatabase() {
+  const database = getDb();
   const schemaPath = join(__dirname, 'schema.sql');
   const schema = readFileSync(schemaPath, 'utf-8');
 
-  // Split and execute each statement (skip empty ones)
+  // Split by semicolons and execute each statement
+  // Filter out PRAGMA statements that might conflict
   const statements = schema
     .split(';')
     .map(s => s.trim())
-    .filter(s => s.length > 0);
+    .filter(s => s.length > 0 && !s.startsWith('PRAGMA'));
 
-  for (const stmt of statements) {
-    try {
-      await pool.query(stmt + ';');
-    } catch (err) {
-      if (!err.message.includes('already exists')) {
-        console.error(`Schema error: ${err.message}`);
+  const transaction = database.transaction(() => {
+    for (const stmt of statements) {
+      try {
+        database.exec(stmt + ';');
+      } catch (err) {
+        // Skip if table/index already exists
+        if (!err.message.includes('already exists')) {
+          console.error(`Schema error: ${err.message}`);
+          console.error(`Statement: ${stmt.substring(0, 100)}...`);
+        }
       }
     }
-  }
+  });
 
-  console.log('✅ Database schema initialized (PostgreSQL)');
+  transaction();
+  console.log('✅ Database schema initialized');
+  return database;
 }
 
 /**
- * Close the pool gracefully.
+ * Close the database connection gracefully.
  */
-export async function closeDb() {
-  if (pool) {
-    await pool.end();
-    pool = null;
+export function closeDb() {
+  if (db) {
+    db.close();
+    db = null;
     console.log('🔒 Database connection closed');
   }
 }
 
-export default { db, getDb, initializeDatabase, closeDb };
+export default { getDb, initializeDatabase, closeDb };

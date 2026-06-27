@@ -1,9 +1,3 @@
-databases:
-  - name: qrforge-db
-    plan: free
-    databaseName: qrforge
-    user: qrforge
-
 services:
   - type: web
     name: qrforge-api
@@ -17,13 +11,13 @@ services:
         value: production
       - key: PORT
         value: 10000
-      - key: DATABASE_URL
-        fromDatabase:
-          name: qrforge-db
-          property: connectionString
+      - key: DB_PATH
+        value: ./data/qrforge.db
       - key: CLIENT_URL
-        value: https://qr-forge-theta.vercel.app
+        # We will need to set this in the Render dashboard after Vercel deployment
+        value: https://qrforge-demo.vercel.app
       - key: BASE_URL
+        # This will be the Render URL
         sync: false
       - key: JWT_SECRET
         generateValue: true

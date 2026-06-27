@@ -34,7 +34,7 @@ export default async function redirectRoute(fastify) {
       };
     } catch {}
 
-    const result = await resolveRedirect(shortCode, {
+    const result = resolveRedirect(shortCode, {
       country: geo.country, region: geo.region, deviceType: deviceInfo.deviceType, ip: clientIp,
     });
 

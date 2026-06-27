@@ -1,92 +1,106 @@
 /**
- * QRForge — Analytics Service (PostgreSQL)
+ * QRForge — Analytics Service
  * 
  * Aggregation queries for the analytics dashboard.
- * All date functions use PostgreSQL syntax (NOW(), INTERVAL, TO_CHAR).
+ * All queries use indexed columns for optimal performance.
  */
 
 import { getDb } from '../db/connection.js';
 
 /**
  * Get scan analytics for a specific QR code.
+ * @param {string} qrId - QR code ID
+ * @param {Object} options - Query options
+ * @param {string} options.period - Time period: '24h', '7d', '30d', '90d', '1y', 'all'
+ * @param {string} options.groupBy - Group by: 'hour', 'day', 'week', 'month'
+ * @returns {Object} Analytics data
  */
-export async function getQRAnalytics(qrId, options = {}) {
+export function getQRAnalytics(qrId, options = {}) {
   const db = getDb();
   const { period = '30d', groupBy = 'day' } = options;
 
   const dateFilter = getDateFilter(period);
 
-  const totalScans = await db.get(`
+  // Total scans
+  const totalScans = db.prepare(`
     SELECT COUNT(*) as count FROM scan_events
     WHERE qr_id = ? ${dateFilter}
-  `, qrId);
+  `).get(qrId);
 
-  const uniqueScans = await db.get(`
+  // Unique scans
+  const uniqueScans = db.prepare(`
     SELECT COUNT(*) as count FROM scan_events
     WHERE qr_id = ? AND is_unique = 1 ${dateFilter}
-  `, qrId);
+  `).get(qrId);
 
+  // Scans over time
   const timeGrouping = getTimeGrouping(groupBy);
-  const scansOverTime = await db.all(`
+  const scansOverTime = db.prepare(`
     SELECT ${timeGrouping} as period, COUNT(*) as count,
            SUM(CASE WHEN is_unique = 1 THEN 1 ELSE 0 END) as unique_count
     FROM scan_events
     WHERE qr_id = ? ${dateFilter}
     GROUP BY period
     ORDER BY period ASC
-  `, qrId);
+  `).all(qrId);
 
-  const deviceBreakdown = await db.all(`
+  // Device breakdown
+  const deviceBreakdown = db.prepare(`
     SELECT device_type, COUNT(*) as count
     FROM scan_events
     WHERE qr_id = ? ${dateFilter}
     GROUP BY device_type
     ORDER BY count DESC
-  `, qrId);
+  `).all(qrId);
 
-  const topCountries = await db.all(`
+  // Top countries
+  const topCountries = db.prepare(`
     SELECT country, COUNT(*) as count
     FROM scan_events
     WHERE qr_id = ? ${dateFilter}
     GROUP BY country
     ORDER BY count DESC
     LIMIT 20
-  `, qrId);
+  `).all(qrId);
 
-  const topCities = await db.all(`
+  // Top cities
+  const topCities = db.prepare(`
     SELECT city, country, COUNT(*) as count
     FROM scan_events
     WHERE qr_id = ? AND city != '' ${dateFilter}
     GROUP BY city, country
     ORDER BY count DESC
     LIMIT 20
-  `, qrId);
+  `).all(qrId);
 
-  const browserBreakdown = await db.all(`
+  // Browser breakdown
+  const browserBreakdown = db.prepare(`
     SELECT browser, COUNT(*) as count
     FROM scan_events
     WHERE qr_id = ? ${dateFilter}
     GROUP BY browser
     ORDER BY count DESC
     LIMIT 10
-  `, qrId);
+  `).all(qrId);
 
-  const osBreakdown = await db.all(`
+  // OS breakdown
+  const osBreakdown = db.prepare(`
     SELECT os, COUNT(*) as count
     FROM scan_events
     WHERE qr_id = ? ${dateFilter}
     GROUP BY os
     ORDER BY count DESC
     LIMIT 10
-  `, qrId);
+  `).all(qrId);
 
-  const recentScans = await db.all(`
+  // Recent scans
+  const recentScans = db.prepare(`
     SELECT id, scanned_at, country, city, device_type, os, browser, is_unique
     FROM scan_events
     WHERE qr_id = ?
     ORDER BY scanned_at DESC
     LIMIT 50
-  `, qrId);
+  `).all(qrId);
 
   return {
     totalScans: totalScans.count,
@@ -104,58 +118,69 @@ export async function getQRAnalytics(qrId, options = {}) {
 
 /**
  * Get organization-wide analytics summary.
+ * @param {string} orgId - Organization ID
+ * @param {string} period - Time period
+ * @returns {Object} Org analytics
  */
-export async function getOrgAnalytics(orgId, period = '30d') {
+export function getOrgAnalytics(orgId, period = '30d') {
   const db = getDb();
   const orgDateFilter = getOrgDateFilter(period);
 
-  const totalQRs = await db.get(`
+  // Total QR codes
+  const totalQRs = db.prepare(`
     SELECT COUNT(*) as count FROM qr_codes WHERE org_id = ?
-  `, orgId);
+  `).get(orgId);
 
-  const activeQRs = await db.get(`
+  // Active QR codes
+  const activeQRs = db.prepare(`
     SELECT COUNT(*) as count FROM qr_codes WHERE org_id = ? AND is_active = 1
-  `, orgId);
+  `).get(orgId);
 
-  const totalScans = await db.get(`
+  // Total scans this period
+  const totalScans = db.prepare(`
     SELECT COUNT(*) as count FROM scan_events se
     JOIN qr_codes q ON q.id = se.qr_id
     WHERE q.org_id = ? ${orgDateFilter}
-  `, orgId);
+  `).get(orgId);
 
-  const uniqueScans = await db.get(`
+  // Unique scans this period
+  const uniqueScans = db.prepare(`
     SELECT COUNT(*) as count FROM scan_events se
     JOIN qr_codes q ON q.id = se.qr_id
     WHERE q.org_id = ? AND se.is_unique = 1 ${orgDateFilter}
-  `, orgId);
+  `).get(orgId);
 
-  const topQRCodes = await db.all(`
+  // Top performing QR codes
+  const topQRCodes = db.prepare(`
     SELECT q.id, q.label, q.short_code, q.total_scans as scan_count
     FROM qr_codes q
     WHERE q.org_id = ?
     ORDER BY q.total_scans DESC
     LIMIT 10
-  `, orgId);
+  `).all(orgId);
 
-  const scansPerDay = await db.all(`
-    SELECT TO_CHAR(se.scanned_at, 'YYYY-MM-DD') as period, COUNT(*) as count
+  // Scans per day (last 30 days)
+  const scansPerDay = db.prepare(`
+    SELECT date(se.scanned_at) as period, COUNT(*) as count
     FROM scan_events se
     JOIN qr_codes q ON q.id = se.qr_id
-    WHERE q.org_id = ? AND se.scanned_at > NOW() - INTERVAL '30 days'
+    WHERE q.org_id = ? AND se.scanned_at > datetime('now', '-30 days')
     GROUP BY period
     ORDER BY period ASC
-  `, orgId);
+  `).all(orgId);
 
-  const deviceBreakdown = await db.all(`
+  // Device breakdown
+  const deviceBreakdown = db.prepare(`
     SELECT se.device_type, COUNT(*) as count
     FROM scan_events se
     JOIN qr_codes q ON q.id = se.qr_id
     WHERE q.org_id = ? ${orgDateFilter}
     GROUP BY se.device_type
     ORDER BY count DESC
-  `, orgId);
+  `).all(orgId);
 
-  const countryBreakdown = await db.all(`
+  // Country breakdown
+  const countryBreakdown = db.prepare(`
     SELECT se.country, COUNT(*) as count
     FROM scan_events se
     JOIN qr_codes q ON q.id = se.qr_id
@@ -163,7 +188,7 @@ export async function getOrgAnalytics(orgId, period = '30d') {
     GROUP BY se.country
     ORDER BY count DESC
     LIMIT 10
-  `, orgId);
+  `).all(orgId);
 
   return {
     totalQRCodes: totalQRs.count,
@@ -178,39 +203,50 @@ export async function getOrgAnalytics(orgId, period = '30d') {
   };
 }
 
-// ─── PostgreSQL date filters ──────────────────────────
-
+/**
+ * Get SQL date filter clause based on period string.
+ * @param {string} period
+ * @returns {string} SQL WHERE clause fragment
+ */
 function getDateFilter(period) {
   switch (period) {
-    case '24h': return "AND scanned_at > NOW() - INTERVAL '24 hours'";
-    case '7d':  return "AND scanned_at > NOW() - INTERVAL '7 days'";
-    case '30d': return "AND scanned_at > NOW() - INTERVAL '30 days'";
-    case '90d': return "AND scanned_at > NOW() - INTERVAL '90 days'";
-    case '1y':  return "AND scanned_at > NOW() - INTERVAL '1 year'";
+    case '24h': return "AND scanned_at > datetime('now', '-24 hours')";
+    case '7d': return "AND scanned_at > datetime('now', '-7 days')";
+    case '30d': return "AND scanned_at > datetime('now', '-30 days')";
+    case '90d': return "AND scanned_at > datetime('now', '-90 days')";
+    case '1y': return "AND scanned_at > datetime('now', '-1 year')";
     case 'all': return '';
-    default:    return "AND scanned_at > NOW() - INTERVAL '30 days'";
+    default: return "AND scanned_at > datetime('now', '-30 days')";
   }
 }
 
+/**
+ * Org-level date filter using se. alias for JOIN queries.
+ */
 function getOrgDateFilter(period) {
   switch (period) {
-    case '24h': return "AND se.scanned_at > NOW() - INTERVAL '24 hours'";
-    case '7d':  return "AND se.scanned_at > NOW() - INTERVAL '7 days'";
-    case '30d': return "AND se.scanned_at > NOW() - INTERVAL '30 days'";
-    case '90d': return "AND se.scanned_at > NOW() - INTERVAL '90 days'";
-    case '1y':  return "AND se.scanned_at > NOW() - INTERVAL '1 year'";
+    case '24h': return "AND se.scanned_at > datetime('now', '-24 hours')";
+    case '7d': return "AND se.scanned_at > datetime('now', '-7 days')";
+    case '30d': return "AND se.scanned_at > datetime('now', '-30 days')";
+    case '90d': return "AND se.scanned_at > datetime('now', '-90 days')";
+    case '1y': return "AND se.scanned_at > datetime('now', '-1 year')";
     case 'all': return '';
-    default:    return "AND se.scanned_at > NOW() - INTERVAL '30 days'";
+    default: return "AND se.scanned_at > datetime('now', '-30 days')";
   }
 }
 
+/**
+ * Get SQL time grouping expression.
+ * @param {string} groupBy
+ * @returns {string} SQL expression
+ */
 function getTimeGrouping(groupBy) {
   switch (groupBy) {
-    case 'hour':  return "TO_CHAR(scanned_at, 'YYYY-MM-DD HH24:00')";
-    case 'day':   return "TO_CHAR(scanned_at, 'YYYY-MM-DD')";
-    case 'week':  return "TO_CHAR(scanned_at, 'IYYY-\"W\"IW')";
-    case 'month': return "TO_CHAR(scanned_at, 'YYYY-MM')";
-    default:      return "TO_CHAR(scanned_at, 'YYYY-MM-DD')";
+    case 'hour': return "strftime('%Y-%m-%d %H:00', scanned_at)";
+    case 'day': return "date(scanned_at)";
+    case 'week': return "strftime('%Y-W%W', scanned_at)";
+    case 'month': return "strftime('%Y-%m', scanned_at)";
+    default: return "date(scanned_at)";
   }
 }
 
